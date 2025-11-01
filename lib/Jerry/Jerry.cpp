@@ -41,8 +41,6 @@ PinConfig_t pinConfigs[PIN_CONFIG_COUNT] = {
     {BTN_3_PIN, INPUT_PULLUP, -1}
 };
 
-uint8_t maxSpeed = 255; // Default maximum speed
-
 void Jerry_Init(void) {
     for(uint8_t i = 0; i < PIN_CONFIG_COUNT; ++i) {
         pinMode(pinConfigs[i].pin, pinConfigs[i].mode);

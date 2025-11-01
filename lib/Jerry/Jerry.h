@@ -17,8 +17,6 @@
 
 void Jerry_Init(void);
 
-void Jerry_Task(void);
-
 int16_t Jerry_lineRead(void);
 void Jerry_getSensorValues(char * output);
 void Jerry_setMaxSpeed(uint8_t maxSpeed);

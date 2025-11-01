@@ -10,27 +10,31 @@ PID::PID(double kp, double ki, double kd)
 PID::~PID() = default;
 
 double PID::compute(double error) {
-    // Integral term accumulation (with anti-windup)
-    if (ki_ != 0.0) {
-        integral_ += error;
-        // Anti-windup: only accumulate integral if output hasn't saturated
-        // This prevents integral from growing when output is limited
-        if (limitsEnabled_) {
-            double output_no_integral = kp_ * error + (error - lastError_) * kd_;
-            if ((output_no_integral >= outputMax_ && integral_ > 0) || 
-                (output_no_integral <= outputMin_ && integral_ < 0)) {
-                integral_ -= error; // Undo accumulation if saturated
-            }
-        }
-    }
-    
     // Derivative term calculation
     // Based on the algorithm: derivate = (error - lastError) * KD
     double derivative = (error - lastError_) * kd_;
     
-    // PID calculation: motorSpeed = KP * error + derivate
-    // For full PID: motorSpeed = KP * error + KI * integral + KD * derivative
-    double output = kp_ * error + ki_ * integral_ + derivative;
+    // Calculate output without integral first
+    double output = kp_ * error + derivative;
+    
+    // Integral term accumulation (with anti-windup protection)
+    if (ki_ != 0.0) {
+        integral_ += error;
+        output += ki_ * integral_;
+        
+        // Anti-windup: if output is saturated and integral would make it worse, reset it
+        if (limitsEnabled_) {
+            if (output > outputMax_ || output < outputMin_) {
+                // Only prevent integral growth if it's contributing to saturation
+                double output_without_integral = kp_ * error + derivative;
+                if ((output_without_integral >= outputMax_ && integral_ > 0) ||
+                    (output_without_integral <= outputMin_ && integral_ < 0)) {
+                    integral_ -= error; // Undo accumulation
+                    output = kp_ * error + ki_ * integral_ + derivative;
+                }
+            }
+        }
+    }
     
     // Apply output limits if enabled
     if (limitsEnabled_) {
