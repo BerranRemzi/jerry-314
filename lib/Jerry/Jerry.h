@@ -12,8 +12,15 @@
 #define MOTOR_EN_PIN 4   // PD4 (Digital Pin 4)
 #define MOTOR_R1_PIN 5   // PD5 (Digital Pin 5)
 #define MOTOR_R2_PIN 6   // PD6 (Digital Pin 6)
-#define MOTOR_L1_PIN 9   // PB1 (Digital Pin 9)
-#define MOTOR_L2_PIN 10  // PB2 (Digital Pin 10)
+
+#define WRONTH_MOTOR_PINS
+#ifndef WRONTH_MOTOR_PINS
+#define MOTOR_L1_PIN 10  // PB1 (Digital Pin 9)
+#define MOTOR_L2_PIN 9   // PB2 (Digital Pin 10)
+#else
+#define MOTOR_L1_PIN 10  // PB2 (Digital Pin 10)
+#define MOTOR_L2_PIN 9   // PB1 (Digital Pin 9)
+#endif
 
 void Jerry_Init(void);
 
