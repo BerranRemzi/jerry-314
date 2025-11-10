@@ -4,6 +4,7 @@
 #ifdef ARDUINO
 #include <avr/interrupt.h>
 #endif
+#include <ErriezSerialTerminal.h>
 
 // Constants
 #define ANALOG_PIN_COUNT 8
@@ -189,4 +190,22 @@ void Jerry_setSpeed(int16_t left, int16_t right) {
         digitalWrite(MOTOR_R1_PIN, LOW);
         analogWrite(MOTOR_R2_PIN, -right);
     }
+}
+
+void cmdBootloader(void)
+{
+#if FLASHEND > 140000
+  Serial.println(F("Jump not supported on chips with >128k"));
+#else
+  typedef void (*do_reboot_t)(void);
+  const do_reboot_t do_reboot = (do_reboot_t)((FLASHEND - 511) >> 1);
+  
+  Serial.println(F("Jumping to bootloader..."));
+  Serial.print(F("Bootloader address: 0x"));
+  Serial.println((uint16_t)do_reboot, HEX);
+  Serial.flush();
+  cli();
+  TCCR0A = TCCR1A = TCCR2A = 0;
+  do_reboot();
+#endif
 }

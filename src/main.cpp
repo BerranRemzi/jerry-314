@@ -2,18 +2,26 @@
 #include "BigLoop.h"
 #include "Jerry.h"
 #include "PID.h"
-#include <IRremote.h>
+#include <IRremote.hpp>
+#include <ErriezSerialTerminal.h>
 
 BigLoop Task_100ms(100u);
-BigLoop Task_10ms(20u);
+BigLoop Task_20ms(20u);
 
 //Specify the links and initial tuning parameters
 double Kp=1.0, Ki=0.0, Kd=5.0;
 PID pidController(Kp, Ki, Kd);
 
+// Newline character '\r' or '\n'
+int8_t newlineChar = '\n';
+// Separator character between commands and arguments
+int8_t delimiterChar = ' ';
+
+// Create serial terminal object
+SerialTerminal term(newlineChar, delimiterChar);
 
 int16_t baseSpeed = 20;
-double motorSpeed=0;
+int16_t motorSpeed=0;
 int16_t line = 0;
 
 void IR_Task()
@@ -87,10 +95,24 @@ void IR_Task()
     }
 }
 
+void cmdHelp(void)
+{
+  Serial.println(F("Available commands:"));
+  Serial.println(F("  help        - Print this help"));
+  Serial.println(F("  bootloader  - Jump to bootloader"));
+}
+
+void unknownCommand(const char *command)
+{
+  Serial.print(F("Unknown command: "));
+  Serial.println(command);
+  Serial.println(F("Type 'help' for available commands"));
+}
+
 void setup()
 {
   // put your setup code here, to run once:
-  Serial.begin(9600); // Initialize serial communication at 9600 baud
+  Serial.begin(115200); // Initialize serial communication at 9600 baud
   Jerry_Init();
   //Jerry_motorEnable(); // Enable motors when button 1 is pressed 
   //Jerry_setSpeed(-40, 40); // Set speed for both motors
@@ -103,28 +125,44 @@ void setup()
   pidController.setOutputLimits(-255, 255);
   // Start the receiver and if not 3. parameter specified, take LED_BUILTIN pin from the internal boards definition as default feedback LED
     IrReceiver.begin(IR_RECEIVE_PIN);
+
+  // Initialize serial terminal
+  // Set default handler for unknown commands
+  term.setDefaultHandler(unknownCommand);
+  
+  // Add command callbacks
+  term.addCommand("?", cmdHelp);
+  term.addCommand("help", cmdHelp);
+  term.addCommand("bootloader", cmdBootloader);
 }
 
 void loop()
 {
   IR_Task(); // Handle IR receiving
-  if(Task_10ms.shouldExecuteTask())
+  // Read from serial port and handle command callbacks
+  term.readSerial();
+  if(Task_20ms.shouldExecuteTask())
   {
-    //digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
-    
-    // 10ms tasks can be added here if needed
+    // 20ms tasks can be added here if needed
     line = Jerry_lineRead(); // Read line sensor values
-    motorSpeed = pidController.compute((double)line);
+    motorSpeed = (int16_t)pidController.compute((double)line);
     Jerry_setSpeed(baseSpeed - (int)motorSpeed, baseSpeed + (int)motorSpeed); // Adjust motor speeds based on PID output
     
-    //digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
-  }
+    char buffer[64];
+    Jerry_getSensorValues(buffer);
+    //snprintf(buffer, sizeof(buffer), "%d,%d\n", line, motorSpeed);
+    Serial.write(buffer);
+    Serial.print("L,");
+    Serial.println(line);
+    Serial.print("O,");
+    Serial.println(motorSpeed);
+ }
 
   if (Task_100ms.shouldExecuteTask())
   {
-    char buffer[64]; // Increased buffer size for safety
-    snprintf(buffer, sizeof(buffer), "L:%3d O:%3d\n", line, (int)motorSpeed);
-    Serial.print(buffer); // Send line position and PID output over serial
+    //char buffer[64]; // Increased buffer size for safety
+    //snprintf(buffer, sizeof(buffer), "L:%3d O:%3d\n", line, (int)motorSpeed);
+    //Serial.print(buffer); // Send line position and PID output over serial
 
     // Button handling
     if(digitalRead(BTN_1_PIN) == LOW) {
