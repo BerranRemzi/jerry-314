@@ -61,6 +61,14 @@ Enable or disable logging of specific data types:
 - `log o on` - Enable logging of PID output (O format)
 - `log o off` - Disable logging of PID output
 
+**Default Logging States:**
+- Sensor values (S): **Enabled** by default
+- Line position (L): **Enabled** by default
+- PID output (O): **Enabled** by default
+- PID P/I/D values: **Disabled** by default
+
+**Note:** When PID P/I/D logging is enabled, values are logged at a maximum rate of once every 100ms to avoid excessive serial traffic.
+
 ## Data Received from Robot
 
 All data is received as text lines terminated with a newline character (`\n`).
@@ -98,18 +106,28 @@ All data is received as text lines terminated with a newline character (`\n`).
 When reading parameters (using `?`), the robot responds with:
 
 - `pid p <value>` - Response to `pid p ?`
-  - Example: `pid p 10.5`
-  - Format: Three space-separated tokens: "pid", "p"/"i"/"d", and float value
+  - Example: `pid p 10.500`
+  - Format: Three space-separated tokens: "pid", "p"/"i"/"d", and float value (3 decimal places)
 
 - `pid i <value>` - Response to `pid i ?`
-  - Example: `pid i 5.2`
+  - Example: `pid i 5.200`
 
 - `pid d <value>` - Response to `pid d ?`
-  - Example: `pid d 2.1`
+  - Example: `pid d 2.100`
 
 - `motor speed <value>` - Response to `motor speed ?`
   - Example: `motor speed 100`
-  - Format: Three space-separated tokens: "motor", "speed", and integer/float value
+  - Format: Three space-separated tokens: "motor", "speed", and integer value
+
+### System Commands
+
+- `help` or `?` - Display available commands and usage
+  - Example: `help`
+  - The robot responds with a list of all available commands
+
+- `bootloader` - Jump to bootloader mode
+  - Example: `bootloader`
+  - **Warning:** This command will restart the device in bootloader mode
 
 ## Communication Settings
 
@@ -121,14 +139,19 @@ When reading parameters (using `?`), the robot responds with:
 
 ### Sending Commands
 ```
+help
 pid p 10.5
 pid i 5.2
 pid d 2.1
+pid p ?
 motor speed 100
+motor speed ?
 motor start
+motor stop
 log s on
 log l on
 log o on
+log p on
 ```
 
 ### Receiving Data
@@ -141,12 +164,22 @@ L,-5
 O,-50
 ```
 
+## Error Handling
+
+If a command is invalid or missing required arguments, the robot will respond with a usage message:
+- `Usage: pid <p|i|d> <value> or pid <p|i|d> ?`
+- `Usage: motor <speed|start|stop> [value|?]`
+- `Usage: log <type> <on|off>`
+- `Unknown command: <command>` - For unrecognized commands
+
 ## Notes
 
 - All commands are case-sensitive
 - Commands must end with a newline (`\n`)
+- Commands are parsed using space-separated arguments (e.g., `pid p 10.5` has three tokens: "pid", "p", "10.5")
 - Whitespace around commas in data formats is optional but recommended for consistency
-- The program automatically scans for valid serial ports and connects when it detects data matching the expected formats
+- The Python GUI program automatically scans for valid serial ports and connects when it detects data matching the expected formats
 - Parameter read responses update the GUI automatically when received
 - Multiple data formats can be sent in any order and will be parsed accordingly
+- Invalid parameter types (e.g., `pid x 10`) will result in an error message
 

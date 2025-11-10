@@ -4,6 +4,7 @@
 #include "PID.h"
 #include <IRremote.hpp>
 #include <ErriezSerialTerminal.h>
+#include <string.h>
 
 BigLoop Task_100ms(100u);
 BigLoop Task_20ms(20u);
@@ -23,6 +24,14 @@ SerialTerminal term(newlineChar, delimiterChar);
 int16_t baseSpeed = 20;
 int16_t motorSpeed=0;
 int16_t line = 0;
+
+// Logging flags - default: sensor, line, and output enabled
+bool logP = false;
+bool logI = false;
+bool logD = false;
+bool logS = true;
+bool logL = true;
+bool logO = true;
 
 void IR_Task()
 {
@@ -95,11 +104,156 @@ void IR_Task()
     }
 }
 
+// PID command handler
+void cmdPid(void) {
+  char *paramType = term.getNext();
+  if (paramType == NULL) {
+    Serial.println(F("Usage: pid <p|i|d> <value> or pid <p|i|d> ?"));
+    return;
+  }
+  
+  char *valueStr = term.getNext();
+  if (valueStr == NULL) {
+    Serial.println(F("Usage: pid <p|i|d> <value> or pid <p|i|d> ?"));
+    return;
+  }
+  
+  // Handle read or write
+  if (strcmp(valueStr, "?") == 0) {
+    // Read mode
+    Serial.print(F("pid "));
+    Serial.print(paramType);
+    Serial.print(F(" "));
+    switch (paramType[0]) {
+      case 'p':
+        Serial.println(pidController.getKp(), 3);
+        break;
+      case 'i':
+        Serial.println(pidController.getKi(), 3);
+        break;
+      case 'd':
+        Serial.println(pidController.getKd(), 3);
+        break;
+      default:
+        Serial.println(F("Invalid parameter. Use: p, i, or d"));
+        return;
+    }
+  } else {
+    // Write mode
+    double value = atof(valueStr);
+    switch (paramType[0]) {
+      case 'p':
+        pidController.setKp(value);
+        break;
+      case 'i':
+        pidController.setKi(value);
+        break;
+      case 'd':
+        pidController.setKd(value);
+        break;
+      default:
+        Serial.println(F("Invalid parameter. Use: p, i, or d"));
+        return;
+    }
+  }
+}
+
+// Motor command handler
+void cmdMotor(void) {
+  char *subcmd = term.getNext();
+  if (subcmd == NULL) {
+    Serial.println(F("Usage: motor <speed|start|stop> [value|?]"));
+    return;
+  }
+  
+  if (strcmp(subcmd, "speed") == 0) {
+    // Handle speed command
+    char *valueStr = term.getNext();
+    if (valueStr == NULL) {
+      Serial.println(F("Usage: motor speed <value> or motor speed ?"));
+      return;
+    }
+    
+    if (strcmp(valueStr, "?") == 0) {
+      // Read mode
+      Serial.print(F("motor speed "));
+      Serial.println(baseSpeed);
+    } else {
+      // Write mode
+      int value = atoi(valueStr);
+      baseSpeed = value;
+    }
+  } else if (strcmp(subcmd, "start") == 0) {
+    // Handle start command
+    Jerry_motorEnable();
+  } else if (strcmp(subcmd, "stop") == 0) {
+    // Handle stop command
+    Jerry_motorDisable();
+  } else {
+    Serial.println(F("Usage: motor <speed|start|stop> [value|?]"));
+  }
+}
+
+// Logging command handler
+void cmdLog(void) {
+  char *type = term.getNext();
+  if (type == NULL) {
+    Serial.println(F("Usage: log <type> <on|off>"));
+    Serial.println(F("Types: p, i, d, s, l, o"));
+    return;
+  }
+  
+  char *stateStr = term.getNext();
+  if (stateStr == NULL) {
+    Serial.println(F("Usage: log <type> <on|off>"));
+    return;
+  }
+  
+  bool state = (strcmp(stateStr, "on") == 0);
+  
+  // Update appropriate flag
+  switch (type[0]) {
+    case 'p':
+      logP = state;
+      break;
+    case 'i':
+      logI = state;
+      break;
+    case 'd':
+      logD = state;
+      break;
+    case 's':
+      logS = state;
+      break;
+    case 'l':
+      logL = state;
+      break;
+    case 'o':
+      logO = state;
+      break;
+    default:
+      Serial.println(F("Invalid log type. Use: p, i, d, s, l, o"));
+      return;
+  }
+}
+
 void cmdHelp(void)
 {
   Serial.println(F("Available commands:"));
-  Serial.println(F("  help        - Print this help"));
-  Serial.println(F("  bootloader  - Jump to bootloader"));
+  Serial.println(F("  help              - Print this help"));
+  Serial.println(F("  bootloader        - Jump to bootloader"));
+  Serial.println(F("  pid p <value>     - Set PID P coefficient"));
+  Serial.println(F("  pid p ?           - Read PID P coefficient"));
+  Serial.println(F("  pid i <value>     - Set PID I coefficient"));
+  Serial.println(F("  pid i ?           - Read PID I coefficient"));
+  Serial.println(F("  pid d <value>     - Set PID D coefficient"));
+  Serial.println(F("  pid d ?           - Read PID D coefficient"));
+  Serial.println(F("  motor speed <val> - Set motor speed"));
+  Serial.println(F("  motor speed ?     - Read motor speed"));
+  Serial.println(F("  motor start       - Start motor"));
+  Serial.println(F("  motor stop        - Stop motor"));
+  Serial.println(F("  log <type> <on|off> - Enable/disable logging"));
+  Serial.println(F("    Types: p, i, d, s, l, o"));
 }
 
 void unknownCommand(const char *command)
@@ -134,6 +288,15 @@ void setup()
   term.addCommand("?", cmdHelp);
   term.addCommand("help", cmdHelp);
   term.addCommand("bootloader", cmdBootloader);
+  
+  // PID command
+  term.addCommand("pid", cmdPid);
+  
+  // Motor command
+  term.addCommand("motor", cmdMotor);
+  
+  // Logging command
+  term.addCommand("log", cmdLog);
 }
 
 void loop()
@@ -148,14 +311,38 @@ void loop()
     motorSpeed = (int16_t)pidController.compute((double)line);
     Jerry_setSpeed(baseSpeed - (int)motorSpeed, baseSpeed + (int)motorSpeed); // Adjust motor speeds based on PID output
     
-    char buffer[64];
-    Jerry_getSensorValues(buffer);
-    //snprintf(buffer, sizeof(buffer), "%d,%d\n", line, motorSpeed);
-    Serial.write(buffer);
-    Serial.print("L,");
-    Serial.println(line);
-    Serial.print("O,");
-    Serial.println(motorSpeed);
+    // Output data based on logging flags
+    if (logS) {
+      char buffer[64];
+      Jerry_getSensorValues(buffer);
+      Serial.write(buffer);
+    }
+    if (logL) {
+      Serial.print("L,");
+      Serial.println(line);
+    }
+    if (logO) {
+      Serial.print("O,");
+      Serial.println(motorSpeed);
+    }
+    
+    // Log PID values if enabled (less frequent, only when changed)
+    static unsigned long lastPidLog = 0;
+    if (millis() - lastPidLog > 100) { // Log PID values every 100ms max
+      if (logP) {
+        Serial.print(F("pid p "));
+        Serial.println(pidController.getKp(), 3);
+      }
+      if (logI) {
+        Serial.print(F("pid i "));
+        Serial.println(pidController.getKi(), 3);
+      }
+      if (logD) {
+        Serial.print(F("pid d "));
+        Serial.println(pidController.getKd(), 3);
+      }
+      lastPidLog = millis();
+    }
  }
 
   if (Task_100ms.shouldExecuteTask())
