@@ -237,6 +237,8 @@ class SerialLineGraphApp:
                     baudrate=self.baudrate,
                     timeout=self.read_timeout_s,
                 )
+                # Set DTR active when connecting
+                candidate.dtr = False
             except Exception:
                 continue
 
