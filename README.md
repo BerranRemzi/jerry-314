@@ -1,6 +1,6 @@
 # Line Sensor Graph - Serial Communication Protocol
 
-This document describes all commands that can be sent to the robot and all data formats that can be received from the robot by `line.py`.
+This document describes all commands that can be sent to the robot and all data formats that can be received from the robot by `line_sensor_app.py`.
 
 ## Commands Sent to Robot
 
