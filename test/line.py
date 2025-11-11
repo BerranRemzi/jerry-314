@@ -74,7 +74,6 @@ class SerialLineGraphApp:
         # Time-series data for plotter (L and O values)
         self.plotter_data_lock = threading.Lock()
         self.plotter_data: List[tuple] = []  # List of (timestamp, L_value, O_value) tuples
-        self.plotter_max_points = 500  # Maximum number of points to keep
         self.plotter_start_time: Optional[float] = None
         self.plotter_time_window = tk.DoubleVar(value=10.0)  # Time window in seconds
         self.plotter_time_window_max = tk.DoubleVar(value=60.0)  # Max time window in seconds
@@ -311,11 +310,9 @@ class SerialLineGraphApp:
         time_window_text.insert(0, "10.0")
         time_window_text.bind("<Return>", lambda e: self._on_time_window_changed())
         time_window_text.bind("<FocusOut>", lambda e: self._on_time_window_changed())
-        time_window_slider = tk.Scale(plotter_grid, from_=1.0, to=60.0, resolution=0.5, 
-                                      orient="horizontal", variable=self.plotter_time_window, 
+        time_window_slider = tk.Scale(plotter_grid, from_=1.0, to=self.plotter_time_window_max.get(), 
+                                      resolution=0.5, orient="horizontal", variable=self.plotter_time_window, 
                                       command=lambda v: self._on_time_window_slider_changed(v), length=120)
-        # Update slider to use max variable
-        time_window_slider.config(to=self.plotter_time_window_max.get())
         time_window_slider.grid(row=0, column=2, padx=2, pady=2, sticky="ew")
         
         # Row 1: Max value
@@ -801,7 +798,9 @@ class SerialLineGraphApp:
             return
         try:
             float_value = float(value)
+            # Update the variable (this is already done by the Scale widget, but ensure it's set)
             self._updating_control = True
+            self.plotter_time_window.set(float_value)
             self.time_window_text.delete(0, tk.END)
             self.time_window_text.insert(0, value)
             self._updating_control = False
@@ -1092,37 +1091,15 @@ class SerialLineGraphApp:
             pass
 
     def _add_plotter_data(self, l_value: Optional[int], o_value: Optional[int]) -> None:
-        """Add L or O value to plotter time-series data"""
+        """Add L or O value to plotter time-series data - no filtering, just add all points"""
         current_time = time.time()
         if self.plotter_start_time is None:
             self.plotter_start_time = current_time
         
         with self.plotter_data_lock:
             relative_time = current_time - self.plotter_start_time
-            
-            # If we have recent data (within 10ms), update the last entry
-            # Otherwise, create a new entry
-            if (self.plotter_data and 
-                relative_time - self.plotter_data[-1][0] < 0.01):
-                # Update last entry (very recent, likely same sample)
-                last_entry = list(self.plotter_data[-1])
-                if l_value is not None:
-                    last_entry[1] = l_value
-                if o_value is not None:
-                    last_entry[2] = o_value
-                self.plotter_data[-1] = tuple(last_entry)
-            else:
-                # Add new entry
-                self.plotter_data.append((relative_time, l_value, o_value))
-                
-                # Limit the number of points (rolling window) - more efficient than time-based filtering
-                # Time-based filtering will be done in the drawing function
-                if len(self.plotter_data) > self.plotter_max_points:
-                    removed_time = self.plotter_data[0][0]
-                    self.plotter_data.pop(0)
-                    # Adjust start time to keep relative times correct
-                    if len(self.plotter_data) > 0:
-                        self.plotter_start_time = current_time - (relative_time - removed_time)
+            # Always add a new entry - no filtering, no averaging, no merging
+            self.plotter_data.append((relative_time, l_value, o_value))
 
     def _schedule_gui_update(self) -> None:
         try:
@@ -1131,8 +1108,8 @@ class SerialLineGraphApp:
         except Exception:
             # Prevent crashes from breaking the update loop
             pass
-        # Update ~15 FPS (slightly slower to reduce CPU usage)
-        self.root.after(66, self._schedule_gui_update)
+        # Update ~30 FPS for better responsiveness
+        self.root.after(33, self._schedule_gui_update)
 
     def _draw_graph(self) -> None:
         self.canvas.delete("all")
@@ -1414,7 +1391,7 @@ class SerialLineGraphApp:
         usable_width = max(width - margin * 2, 10)
         usable_height = max(height - margin * 2, 10)
         
-        # Filter data based on time window (more efficient: iterate once)
+        # Filter data based on time window - show only the most recent time_window seconds
         time_window = self.plotter_time_window.get()
         filtered_data = []
         times = []
@@ -1422,22 +1399,38 @@ class SerialLineGraphApp:
         o_values = []
         
         if time_window > 0 and data:
-            # Find max time first (only if we have data)
-            max_time = max(d[0] for d in data if d[0] is not None)
-            time_cutoff = max_time - time_window
-            
-            # Single pass: filter and extract values
+            # Find max time first (most recent data point)
+            max_time = None
             for d in data:
-                t, l_val, o_val = d
-                if t is not None and t >= time_cutoff:
-                    filtered_data.append(d)
-                    times.append(t)
-                    if l_val is not None:
-                        l_values.append(l_val)
-                    if o_val is not None:
-                        o_values.append(o_val)
+                if d[0] is not None:
+                    if max_time is None or d[0] > max_time:
+                        max_time = d[0]
+            
+            if max_time is not None:
+                # Define the visible time range: from (max_time - time_window) to max_time
+                time_min_visible = max_time - time_window
+                time_max_visible = max_time
+                
+                # Filter data to show only points within the visible time window
+                for d in data:
+                    t, l_val, o_val = d
+                    if t is not None and time_min_visible <= t <= time_max_visible:
+                        filtered_data.append(d)
+                        times.append(t)
+                        if l_val is not None:
+                            l_values.append(l_val)
+                        if o_val is not None:
+                            o_values.append(o_val)
+                
+                # Use the defined time window for X-axis scaling
+                time_min = time_min_visible
+                time_max = time_max_visible
+                time_range = time_window
+            else:
+                # No valid time data
+                return
         else:
-            # No time window filtering - extract all data
+            # No time window filtering - show all data
             for d in data:
                 t, l_val, o_val = d
                 if t is not None:
@@ -1447,15 +1440,15 @@ class SerialLineGraphApp:
                         l_values.append(l_val)
                     if o_val is not None:
                         o_values.append(o_val)
+            
+            if not times:
+                return
+            
+            time_min = min(times)
+            time_max = max(times)
+            time_range = max(time_max - time_min, 0.1)  # Avoid division by zero
         
         data = filtered_data
-        
-        if not times:
-            return
-        
-        time_min = min(times)
-        time_max = max(times)
-        time_range = max(time_max - time_min, 0.1)  # Avoid division by zero
         
         # Find value ranges for scaling
         l_min = min(l_values) if l_values else -127
@@ -1493,18 +1486,34 @@ class SerialLineGraphApp:
                 anchor="e"
             )
         
-        # X-axis label (time)
+        # X-axis labels (time range)
         if time_range > 0:
+            # Show time range on X-axis
+            self.plotter_canvas.create_text(
+                graph_left, graph_bottom + 20,
+                text=f"{time_min:.1f}s",
+                fill="#aaa", font=("Segoe UI", 8),
+                anchor="w"
+            )
             self.plotter_canvas.create_text(
                 graph_right, graph_bottom + 20,
-                text=f"Time: {time_max:.1f}s",
+                text=f"{time_max:.1f}s",
                 fill="#aaa", font=("Segoe UI", 8),
                 anchor="e"
             )
+            # Show time window in center
+            self.plotter_canvas.create_text(
+                (graph_left + graph_right) / 2, graph_bottom + 20,
+                text=f"Window: {time_window:.1f}s",
+                fill="#aaa", font=("Segoe UI", 8),
+                anchor="center"
+            )
         
-        # Draw L values (line position) in yellow - single pass
+        # Draw L values (line position) in yellow - draw all points, no sampling
         l_points = []
         o_points = []
+        
+        # Draw all data points - no filtering or sampling
         for t, l_val, o_val in data:
             if t is not None:
                 x = graph_left + ((t - time_min) / time_range) * usable_width
@@ -1515,23 +1524,22 @@ class SerialLineGraphApp:
                     y = graph_bottom - ((o_val - combined_min) / combined_range) * usable_height
                     o_points.append((x, y))
         
-        # Draw lines more efficiently
+        # Draw lines more efficiently - use polyline for better performance
         if len(l_points) > 1:
-            # Use create_line with multiple points for better performance
-            for i in range(len(l_points) - 1):
-                self.plotter_canvas.create_line(
-                    l_points[i][0], l_points[i][1],
-                    l_points[i + 1][0], l_points[i + 1][1],
-                    fill="#ffff00", width=2, smooth=False
-                )
+            # Draw L line (yellow) - use polyline
+            coords = []
+            for x, y in l_points:
+                coords.extend([x, y])
+            if len(coords) >= 4:  # At least 2 points
+                self.plotter_canvas.create_line(*coords, fill="#ffff00", width=2, smooth=False)
         
         if len(o_points) > 1:
-            for i in range(len(o_points) - 1):
-                self.plotter_canvas.create_line(
-                    o_points[i][0], o_points[i][1],
-                    o_points[i + 1][0], o_points[i + 1][1],
-                    fill="#00ffff", width=2, smooth=False
-                )
+            # Draw O line (cyan) - use polyline
+            coords = []
+            for x, y in o_points:
+                coords.extend([x, y])
+            if len(coords) >= 4:  # At least 2 points
+                self.plotter_canvas.create_line(*coords, fill="#00ffff", width=2, smooth=False)
         
         # Draw legend
         legend_y = graph_top + 15
