@@ -7,7 +7,7 @@
 #include <ErriezSerialTerminal.h>
 
 BigLoop Task_100ms(100u);
-BigLoop Task_20ms(20u);
+BigLoop Task_10ms(10u);
 
 //Specify the links and initial tuning parameters
 double Kp=1.0, Ki=0.0, Kd=5.0;
@@ -110,7 +110,7 @@ void setup()
   //delay(1000); // Wait for a second
   Jerry_motorDisable(); // Enable motors when button 1 is pressed 
 
-  Jerry_setMaxSpeed(100); // Limit maximum speed to 150
+  //Jerry_setMaxSpeed(100); // Limit maximum speed to 150
 
   // Optional: set output limits
   pidController.setOutputLimits(-255, 255);
@@ -126,9 +126,9 @@ void loop()
   IR_Task(); // Handle IR receiving
   // Read from serial port and handle command callbacks
   term.readSerial();
-  if(Task_20ms.shouldExecuteTask())
+  if(Task_10ms.shouldExecuteTask())
   {
-    // 20ms tasks can be added here if needed
+    // 10ms tasks can be added here if needed
     line = Jerry_lineRead(); // Read line sensor values
     motorSpeed = (int16_t)pidController.compute((double)line);
     Jerry_setSpeed(baseSpeed - (int)motorSpeed, baseSpeed + (int)motorSpeed); // Adjust motor speeds based on PID output

@@ -78,7 +78,7 @@ static bool checkEdgeDetection(uint16_t max_val, uint16_t* adc_array, uint8_t ed
 int16_t Jerry_lineRead(void) {
     // Enable line sensor
     digitalWrite(LINE_SENSOR_EN_PIN, HIGH);
-    delay(10); // Allow sensor to stabilize
+    delay(1); // Allow sensor to stabilize
     
     // Read all ADC channels
     for (uint8_t i = 0; i < ANALOG_PIN_COUNT; ++i) {

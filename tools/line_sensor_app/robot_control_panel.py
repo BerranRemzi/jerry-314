@@ -135,8 +135,9 @@ class ControlPanel:
         pid_p_text.grid(row=0, column=1, padx=2, pady=2, sticky="w")
         pid_p_text.bind("<Return>", lambda e: self._on_pid_p_changed())
         pid_p_text.bind("<FocusOut>", lambda e: self._on_pid_p_changed())
-        pid_p_slider = tk.Scale(pid_grid, from_=0.0, to=100.0, resolution=0.1, 
-                                orient="horizontal", variable=self.pid_p_value, 
+        pid_p_text.bind("<MouseWheel>", lambda e: self._on_pid_p_scroll(e))
+        pid_p_slider = tk.Scale(pid_grid, from_=0.0, to=100.0, resolution=0.1,
+                                orient="horizontal", variable=self.pid_p_value,
                                 command=lambda v: self._on_pid_p_slider_changed(v), length=100)
         pid_p_slider.grid(row=0, column=2, padx=2, pady=2, sticky="ew")
         tk.Label(pid_grid, text="Max:", font=("Segoe UI", 8)).grid(row=0, column=3, padx=2, pady=2, sticky="w")
@@ -152,8 +153,9 @@ class ControlPanel:
         pid_i_text.grid(row=1, column=1, padx=2, pady=2, sticky="w")
         pid_i_text.bind("<Return>", lambda e: self._on_pid_i_changed())
         pid_i_text.bind("<FocusOut>", lambda e: self._on_pid_i_changed())
-        pid_i_slider = tk.Scale(pid_grid, from_=0.0, to=100.0, resolution=0.1, 
-                                orient="horizontal", variable=self.pid_i_value, 
+        pid_i_text.bind("<MouseWheel>", lambda e: self._on_pid_i_scroll(e))
+        pid_i_slider = tk.Scale(pid_grid, from_=0.0, to=100.0, resolution=0.1,
+                                orient="horizontal", variable=self.pid_i_value,
                                 command=lambda v: self._on_pid_i_slider_changed(v), length=100)
         pid_i_slider.grid(row=1, column=2, padx=2, pady=2, sticky="ew")
         tk.Label(pid_grid, text="Max:", font=("Segoe UI", 8)).grid(row=1, column=3, padx=2, pady=2, sticky="w")
@@ -169,8 +171,9 @@ class ControlPanel:
         pid_d_text.grid(row=2, column=1, padx=2, pady=2, sticky="w")
         pid_d_text.bind("<Return>", lambda e: self._on_pid_d_changed())
         pid_d_text.bind("<FocusOut>", lambda e: self._on_pid_d_changed())
-        pid_d_slider = tk.Scale(pid_grid, from_=0.0, to=100.0, resolution=0.1, 
-                                orient="horizontal", variable=self.pid_d_value, 
+        pid_d_text.bind("<MouseWheel>", lambda e: self._on_pid_d_scroll(e))
+        pid_d_slider = tk.Scale(pid_grid, from_=0.0, to=100.0, resolution=0.1,
+                                orient="horizontal", variable=self.pid_d_value,
                                 command=lambda v: self._on_pid_d_slider_changed(v), length=100)
         pid_d_slider.grid(row=2, column=2, padx=2, pady=2, sticky="ew")
         tk.Label(pid_grid, text="Max:", font=("Segoe UI", 8)).grid(row=2, column=3, padx=2, pady=2, sticky="w")
@@ -426,6 +429,100 @@ class ControlPanel:
             self._updating_control = False
             if self.serial_command_callback:
                 self.serial_command_callback(f"pid d {float_value}")
+        except ValueError:
+            pass
+
+    # PID Scroll Event Handlers
+    def _on_pid_p_scroll(self, event) -> None:
+        """Handle PID P value change from mouse wheel scroll"""
+        if self._updating_control:
+            return
+        try:
+            # Determine scroll direction (delta > 0 = scroll up, delta < 0 = scroll down)
+            delta = 1 if event.delta > 0 else -1
+            
+            # Get current value and step size
+            current_value = self.pid_p_value.get()
+            max_value = self.pid_p_max.get()
+            step_size = 0.1  # Small increment for precise control
+            
+            # Calculate new value
+            new_value = round(current_value + (delta * step_size), 1)
+            new_value = max(0.0, min(new_value, max_value))  # Clamp to valid range
+            
+            # Update values
+            self._updating_control = True
+            self.pid_p_value.set(new_value)
+            self.controls['pid_p_text'].delete(0, tk.END)
+            self.controls['pid_p_text'].insert(0, str(new_value))
+            self._updating_control = False
+            
+            # Send serial command
+            if self.serial_command_callback:
+                self.serial_command_callback(f"pid p {new_value}")
+                
+        except ValueError:
+            pass
+
+    def _on_pid_i_scroll(self, event) -> None:
+        """Handle PID I value change from mouse wheel scroll"""
+        if self._updating_control:
+            return
+        try:
+            # Determine scroll direction (delta > 0 = scroll up, delta < 0 = scroll down)
+            delta = 1 if event.delta > 0 else -1
+            
+            # Get current value and step size
+            current_value = self.pid_i_value.get()
+            max_value = self.pid_i_max.get()
+            step_size = 0.1  # Small increment for precise control
+            
+            # Calculate new value
+            new_value = current_value + (delta * step_size)
+            new_value = max(0.0, min(new_value, max_value))  # Clamp to valid range
+            
+            # Update values
+            self._updating_control = True
+            self.pid_i_value.set(new_value)
+            self.controls['pid_i_text'].delete(0, tk.END)
+            self.controls['pid_i_text'].insert(0, str(new_value))
+            self._updating_control = False
+            
+            # Send serial command
+            if self.serial_command_callback:
+                self.serial_command_callback(f"pid i {new_value}")
+                
+        except ValueError:
+            pass
+
+    def _on_pid_d_scroll(self, event) -> None:
+        """Handle PID D value change from mouse wheel scroll"""
+        if self._updating_control:
+            return
+        try:
+            # Determine scroll direction (delta > 0 = scroll up, delta < 0 = scroll down)
+            delta = 1 if event.delta > 0 else -1
+            
+            # Get current value and step size
+            current_value = self.pid_d_value.get()
+            max_value = self.pid_d_max.get()
+            step_size = 0.1  # Small increment for precise control
+            
+            # Calculate new value
+            new_value = current_value + (delta * step_size)
+            new_value = max(0.0, min(new_value, max_value))  # Clamp to valid range
+            
+            # Update values
+            self._updating_control = True
+            self.pid_d_value.set(new_value)
+            self.controls['pid_d_text'].delete(0, tk.END)
+            self.controls['pid_d_text'].insert(0, str(new_value))
+            self._updating_control = False
+            
+            # Send serial command
+            if self.serial_command_callback:
+                self.serial_command_callback(f"pid d {new_value}")
+                
         except ValueError:
             pass
 
