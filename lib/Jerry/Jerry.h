@@ -9,30 +9,7 @@
 #define BTN_2_PIN 3   // PD3 (Digital Pin 3)
 #define BTN_3_PIN 7   // PD7 (Digital Pin 7)
 
-#define MOTOR_EN_PIN 4   // PD4 (Digital Pin 4)
-#define MOTOR_R1_PIN 5   // PD5 (Digital Pin 5)
-#define MOTOR_R2_PIN 6   // PD6 (Digital Pin 6)
-
-#define WRONG_MOTOR_PINS
-#ifndef WRONG_MOTOR_PINS
-#define MOTOR_L1_PIN 10  // PB1 (Digital Pin 9)
-#define MOTOR_L2_PIN 9   // PB2 (Digital Pin 10)
-#else
-#define MOTOR_L1_PIN 10  // PB2 (Digital Pin 10)
-#define MOTOR_L2_PIN 9   // PB1 (Digital Pin 9)
-#endif
-
 void Jerry_Init(void);
-void Jerry_configureTimer1(void);
-
-int16_t Jerry_lineRead(void);
-void Jerry_getSensorValues(char * output);
-void Jerry_setMaxSpeed(uint8_t maxSpeed);
-void Jerry_setSpeed(int16_t left, int16_t right);
-void Jerry_motorEnable(void);
-void Jerry_motorDisable(void);
-void Jerry_setEdgeDiffThreshold(uint16_t threshold);
-uint16_t Jerry_getEdgeDiffThreshold(void);
 
 void cmdBootloader(void);
 

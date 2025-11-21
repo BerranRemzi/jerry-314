@@ -1,4 +1,5 @@
 #include "Command.h"
+#include "Motor.h"
 #include <string.h>
 
 // Static member definitions
@@ -114,10 +115,10 @@ void CommandHandler::cmdMotor(void) {
     }
   } else if (strcmp(subcmd, "start") == 0) {
     // Handle start command
-    Jerry_motorEnable();
+    Motor_enable();
   } else if (strcmp(subcmd, "stop") == 0) {
     // Handle stop command
-    Jerry_motorDisable();
+    Motor_disable();
   } else {
     Serial.println(F("Usage: motor <speed|start|stop> [value|?]"));
   }

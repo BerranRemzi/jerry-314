@@ -1,187 +1,142 @@
 #include <Arduino.h>
 #include "BigLoop.h"
 #include "Jerry.h"
+#include "Sensor.h"
+#include "Motor.h"
 #include "PID.h"
 #include "Command.h"
-#include <IRremote.hpp>
+#include "IR.h"
+#include "Button.h"
+#include "Logger.h"
 #include <ErriezSerialTerminal.h>
 
+// Task schedulers
 BigLoop Task_100ms(100u);
 BigLoop Task_10ms(10u);
 
-//Specify the links and initial tuning parameters
-double Kp=1.0, Ki=0.0, Kd=5.0;
+// PID controller with initial tuning parameters
+double Kp = 1.0, Ki = 0.0, Kd = 5.0;
 PID pidController(Kp, Ki, Kd);
 
-// Newline character '\r' or '\n'
-int8_t newlineChar = '\n';
-// Separator character between commands and arguments
-int8_t delimiterChar = ' ';
+// Serial terminal for command interface
+SerialTerminal term('\n', ' ');
 
-// Create serial terminal object
-SerialTerminal term(newlineChar, delimiterChar);
-
+// Control variables (kept in main as requested)
 int16_t baseSpeed = 20;
-int16_t motorSpeed=0;
+int16_t motorSpeed = 0;
 int16_t line = 0;
 
 // Logging flags - default: sensor, line, and output enabled
 LoggingFlags loggingFlags = {false, false, false, true, true, true};
 
-void IR_Task()
-{
-  // IR handling code here
-  if (IrReceiver.decode()) {
+// IR command handler - handles IR remote commands
+bool handleIRCommand(uint8_t command) {
+    switch(command) {
+        case 0x52: // Stop
+            Motor_disable();
+            return true;
+        case 0x19: // Speed 0
+            Motor_enable();
+            baseSpeed = 0;
+            return true;
+        case 0x16: // Speed 25
+            Motor_enable();
+            baseSpeed = 25;
+            return true;
+        case 0x0D: // Speed 50
+            Motor_enable();
+            baseSpeed = 50;
+            return true;
+        case 0x0C: // Speed 75
+            Motor_enable();
+            baseSpeed = 75;
+            return true;
+        case 0x18: // Speed 100
+            Motor_enable();
+            baseSpeed = 100;
+            return true;
+        case 0x5E: // Reserved
+            return true;
+        default:
+            Serial.println(F("Unknown command received."));
+            return false;
+    }
+}
 
-        /*
-         * Print a summary of received data
-         */
-        if (IrReceiver.decodedIRData.protocol == UNKNOWN) {
-            //Serial.println(F("Received noise or an unknown (or not yet enabled) protocol"));
-            // We have an unknown protocol here, print extended info
-            //IrReceiver.printIRResultRawFormatted(&Serial, true);
-
-            IrReceiver.resume(); // Do it here, to preserve raw data for printing with printIRResultRawFormatted()
-        } else {
-            IrReceiver.resume(); // Early enable receiving of the next IR frame
-
-            //IrReceiver.printIRResultShort(&Serial);
-            //IrReceiver.printIRSendUsage(&Serial);
-        }
-        //Serial.println();
-
-        /*
-         * Finally, check the received data and perform actions according to the received command
-         */
-        if (IrReceiver.decodedIRData.flags & IRDATA_FLAGS_IS_REPEAT) {
-            Serial.println(F("Repeat received. Here you can repeat the same action as before."));
-        } else {
-            Serial.println(IrReceiver.decodedIRData.command, HEX);
-            switch(IrReceiver.decodedIRData.command) {
-              case 0x52: // Example command
-                    // Action for command 0x52
-                    Jerry_motorDisable(); // Disable motors when button 2 is pressed
-                    break;
-                case 0x19: // Example command
-                    // Action for command 0x19
-                    Jerry_motorEnable(); // Enable motors when button 1 is pressed
-                    baseSpeed = 0; // Increase base speed
-                    break;
-                case 0x16: // Example command
-                    // Action for command 0x16
-                    Jerry_motorEnable(); // Enable motors when button 1 is pressed
-                    baseSpeed = 25; // Increase base speed
-                    break;
-                case 0x0D: // Example command
-                    // Action for command 0x0D
-                    Jerry_motorEnable(); // Enable motors when button 1 is pressed
-                    baseSpeed = 50; // Increase base speed
-                    break;
-                    case 0x0C: // Example command
-                    // Action for command 0x0C
-                    Jerry_motorEnable(); // Enable motors when button 1 is pressed
-                    baseSpeed = 75; // Increase base speed
-                    break;
-                    case 0x18: // Example command
-                    // Action for command 0x18
-                    Jerry_motorEnable(); // Enable motors when button 1 is pressed
-                    baseSpeed = 100; // Increase base speed
-                    break;
-                    case 0x5E: // Example command
-                    // Action for command 0x5E
-                    break;
-                default:
-                    Serial.println(F("Unknown command received.")); 
-                    break;
-            }
-            
-        }
+// Button press handler
+void handleButtonPress(ButtonID_t button) {
+    switch(button) {
+        case BUTTON_1:
+            Serial.println("Button 1 pressed");
+            Motor_enable();
+            break;
+        case BUTTON_2:
+            Serial.println("Button 2 pressed");
+            Motor_disable();
+            break;
+        case BUTTON_3:
+            // Button 3 not used yet
+            break;
+        default:
+            break;
     }
 }
 
 
 void setup()
 {
-  // put your setup code here, to run once:
-  Serial.begin(115200); // Initialize serial communication at 9600 baud
+  // Initialize serial communication
+  Serial.begin(115200);
+  
+  // Initialize hardware
   Jerry_Init();
-  //Jerry_motorEnable(); // Enable motors when button 1 is pressed 
-  //Jerry_setSpeed(-40, 40); // Set speed for both motors
-  //delay(1000); // Wait for a second
-  Jerry_motorDisable(); // Enable motors when button 1 is pressed 
-
-  //Jerry_setMaxSpeed(100); // Limit maximum speed to 150
-
-  // Optional: set output limits
+  IR_Init();
+  Button_Init();
+  
+  // Initialize control system
   pidController.setOutputLimits(-255, 255);
-  // Start the receiver and if not 3. parameter specified, take LED_BUILTIN pin from the internal boards definition as default feedback LED
-    IrReceiver.begin(IR_RECEIVE_PIN);
-
-  // Initialize command handlers (all command registration is handled in Command library)
+  
+  // Initialize subsystems
+  IR_SetCommandCallback(handleIRCommand);
+  Button_SetPressCallback(handleButtonPress);
+  Logger_Init(loggingFlags);
   CommandHandler::init(term, pidController, baseSpeed, loggingFlags);
+  
+  // Start with motors disabled
+  Motor_disable();
 }
 
 void loop()
 {
-  IR_Task(); // Handle IR receiving
-  // Read from serial port and handle command callbacks
+  // Handle IR input
+  IR_Update();
+  
+  // Handle serial commands
   term.readSerial();
+  
+  // 10ms control loop - KEEP IN LOOP AS REQUESTED
   if(Task_10ms.shouldExecuteTask())
   {
-    // 10ms tasks can be added here if needed
-    line = Jerry_lineRead(); // Read line sensor values
+    // Read sensor
+    line = Sensor_readBlack();
+    
+    // Compute PID
     motorSpeed = (int16_t)pidController.compute((double)line);
-    Jerry_setSpeed(baseSpeed - (int)motorSpeed, baseSpeed + (int)motorSpeed); // Adjust motor speeds based on PID output
     
-    // Output data based on logging flags
-    if (loggingFlags.logS) {
-      char buffer[64];
-      Jerry_getSensorValues(buffer);
-      Serial.write(buffer);
-    }
-    if (loggingFlags.logL) {
-      Serial.print("L,");
-      Serial.println(line);
-    }
-    if (loggingFlags.logO) {
-      Serial.print("O,");
-      Serial.println(motorSpeed);
-    }
+    // Set motor speeds
+    Motor_setSpeed(baseSpeed - (int)motorSpeed, baseSpeed + (int)motorSpeed);
     
-    // Log PID values if enabled (less frequent, only when changed)
-    static unsigned long lastPidLog = 0;
-    if (millis() - lastPidLog > 100) { // Log PID values every 100ms max
-      if (loggingFlags.logP) {
-        Serial.print(F("pid p "));
-        Serial.println(pidController.getKp(), 3);
-      }
-      if (loggingFlags.logI) {
-        Serial.print(F("pid i "));
-        Serial.println(pidController.getKi(), 3);
-      }
-      if (loggingFlags.logD) {
-        Serial.print(F("pid d "));
-        Serial.println(pidController.getKd(), 3);
-      }
-      lastPidLog = millis();
-    }
- }
+    // Logging (using Logger module)
+    Logger_LogSensor();
+    Logger_LogLine(line);
+    Logger_LogOutput(motorSpeed);
+    Logger_LogPID(pidController.getKp(), pidController.getKi(), pidController.getKd());
+  }
 
+  // 100ms tasks
   if (Task_100ms.shouldExecuteTask())
   {
-    //char buffer[64]; // Increased buffer size for safety
-    //snprintf(buffer, sizeof(buffer), "L:%3d O:%3d\n", line, (int)motorSpeed);
-    //Serial.print(buffer); // Send line position and PID output over serial
-
-    // Button handling
-    if(digitalRead(BTN_1_PIN) == LOW) {
-      Serial.println("Button 1 pressed");
-      Jerry_motorEnable(); // Enable motors when button 1 is pressed
-    }
-
-    if(digitalRead(BTN_2_PIN) == LOW) {
-      Serial.println("Button 2 pressed");
-      Jerry_motorDisable(); // Disable motors when button 2 is pressed
-    }
+    // Update button states (handles edge detection and callbacks)
+    Button_Update();
   }
 }
