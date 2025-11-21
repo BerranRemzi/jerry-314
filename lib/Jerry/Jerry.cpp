@@ -10,7 +10,8 @@
 #define ANALOG_PIN_COUNT 8
 static const uint8_t ANALOG_PIN[ANALOG_PIN_COUNT] = {A0, A1, A2, A3, A4, A5, A6, A7};
 static const uint16_t MIN_CONTRAST = 200;
-static const uint16_t EDGE_DIFF_THRESHOLD = 100;
+// Global variables
+static uint16_t edgeDiffThreshold = 100; // Configurable edge detection threshold
 static const uint32_t MIN_SIGNAL_SUM = 100;
 static const double WEIGHT_SCALE_FACTOR = 127.0 / 52.5; // Scale from [-52.5, +52.5] to [-127, +127]
 
@@ -49,6 +50,15 @@ void Jerry_Init(void) {
             digitalWrite(pinConfigs[i].pin, pinConfigs[i].initialValue);
         }
     }
+    
+    Jerry_configureTimer1();
+}
+
+// Configure Timer1 for 977Hz PWM frequency on pins 9 and 10
+void Jerry_configureTimer1(void) {
+    // --- Configure Timer1 ---
+    TCCR1A = _BV(COM1A1) | _BV(COM1B1) | _BV(WGM10);  // Fast PWM 8-bit
+    TCCR1B = _BV(WGM12) | _BV(CS11) | _BV(CS10);      // Prescaler = 64 (CS11 + CS10)
 }
 
 
@@ -67,7 +77,7 @@ static void findMinMax(const uint16_t* array, uint8_t size, uint16_t* min_val, u
 static bool checkEdgeDetection(uint16_t max_val, uint16_t* adc_array, uint8_t edge_idx, int16_t* result) {
     if (max_val == adc_array[edge_idx]) {
         int16_t diff = (int16_t)adc_array[edge_idx] - (int16_t)adc_array[edge_idx + (edge_idx == 0 ? 1 : -1)];
-        if (diff >= EDGE_DIFF_THRESHOLD) {
+        if (diff >= edgeDiffThreshold) {
             *result = (edge_idx == 0) ? -127 : 127;
             return true;
         }
@@ -166,8 +176,17 @@ void Jerry_motorDisable(void) {
     // Disable motor driver
     digitalWrite(MOTOR_EN_PIN, LOW);
 }
+
 void Jerry_setMaxSpeed(uint8_t speed) {
     maxSpeed = speed; // Limit to 0-255 (already uint8_t)
+}
+
+void Jerry_setEdgeDiffThreshold(uint16_t threshold) {
+    edgeDiffThreshold = threshold;
+}
+
+uint16_t Jerry_getEdgeDiffThreshold(void) {
+    return edgeDiffThreshold;
 }
 
 void Jerry_setSpeed(int16_t left, int16_t right) {

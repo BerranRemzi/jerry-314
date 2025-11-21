@@ -23,6 +23,7 @@
 #endif
 
 void Jerry_Init(void);
+void Jerry_configureTimer1(void);
 
 int16_t Jerry_lineRead(void);
 void Jerry_getSensorValues(char * output);
@@ -30,6 +31,8 @@ void Jerry_setMaxSpeed(uint8_t maxSpeed);
 void Jerry_setSpeed(int16_t left, int16_t right);
 void Jerry_motorEnable(void);
 void Jerry_motorDisable(void);
+void Jerry_setEdgeDiffThreshold(uint16_t threshold);
+uint16_t Jerry_getEdgeDiffThreshold(void);
 
 void cmdBootloader(void);
 
