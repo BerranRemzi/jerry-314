@@ -478,7 +478,7 @@ class ControlPanel:
             step_size = 0.1  # Small increment for precise control
             
             # Calculate new value
-            new_value = current_value + (delta * step_size)
+            new_value = round(current_value + (delta * step_size), 1)
             new_value = max(0.0, min(new_value, max_value))  # Clamp to valid range
             
             # Update values
@@ -509,7 +509,7 @@ class ControlPanel:
             step_size = 0.1  # Small increment for precise control
             
             # Calculate new value
-            new_value = current_value + (delta * step_size)
+            new_value = round(current_value + (delta * step_size), 1)
             new_value = max(0.0, min(new_value, max_value))  # Clamp to valid range
             
             # Update values
